@@ -187,7 +187,6 @@ void start() {
 
     std::cout << "Received shutdown signal" << std::endl;
 
-    // Ожидание завершения всех потоков
     pool.close();
     std::cout << "All threads have finished" << std::endl;
 

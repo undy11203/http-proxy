@@ -43,7 +43,7 @@ public:
             if (std::chrono::steady_clock::now() - it->second.timestamp < ttl) {
                 return it->second.response;
             } else {
-                // Remove expired entry
+                // Delete entry and reduce cache size
                 current_size -= it->second.response.size();
                 cache.erase(it);
             }
@@ -57,12 +57,11 @@ public:
 
         // Check if adding this response exceeds the cache size
         if (current_size + response_size > max_size) {
-            // Log error and return without saving
             std::cerr << "Cache size exceeded. Unable to save response for URI: " << uri << std::endl;
             return;
         }
 
-        // Save the response
+        // Save cache
         cache[uri] = CacheEntry(response);
         current_size += response_size;
     }
