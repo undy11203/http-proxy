@@ -204,6 +204,10 @@ void print_help() {
     std::cout << "  --port <port>              Port to listen on (default: 8080)" << std::endl;
     std::cout << "  --max-client-threads <num> Maximum number of client threads (default: 4)" << std::endl;
     std::cout << "  --help                     Display this help message" << std::endl;
+    std::cout << "  --cache-initial-size <num> Initial cache size (default: 1MB)" << std::endl;
+    std::cout << "  --cache-max-size <num>     Max cache size (default: 10MB)" << std::endl;
+    std::cout << "  --cache-ttl <num>          Cache write lifetime (default: 5s)" << std::endl;
+
 }
 
 int main(int argc, char* argv[]) {
