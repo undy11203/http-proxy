@@ -8,8 +8,10 @@
 - нет поддержки https
 
 # Установка и запуск
-cmake -S . -B build
-cmake --build build
+пока что запуск такой: \\
+вызываем \\
+./generate_project.bat conan-io \\
+создаёт .sln решение, открываем его и запускаем в режиме Release
 
 Команда запуска: `./proxy`
 
