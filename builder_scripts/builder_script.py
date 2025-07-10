@@ -27,7 +27,7 @@ class Config:
     FRESH = True
     CLEAN = True
     VERBOSE = False
-    SOURCE_DIR = "Source"
+    SOURCE_DIR = "."
 
 ###############################################################
 
@@ -35,108 +35,98 @@ FRESH_ARG = "--fresh" if Config.FRESH else ""
 CLEAN_ARG = "--clean-first" if Config.CLEAN else ""
 VERBOSE_ARG = "--verbose" if Config.VERBOSE else ""
 
-def remove_build_folder():
-    if os.path.exists(Config.BUILD_FOLDER):
-        shutil.rmtree(Config.BUILD_FOLDER)
-        print(f"Removed {Config.BUILD_FOLDER} folder.")
-    else:
-        print(f"{Config.BUILD_FOLDER} folder does not exist.")
-
-
-def get_cmake_command(action: Action, configuration: Configuration):
-    cmake_flags = {
-        "generator": f'-G "{Config.CMAKE_GENERATOR}"',
-        "platform": f"-A {Config.PLATFORM.value}",
-        "fresh": "--fresh" if Config.FRESH else "",
-        "clean_first": "--clean-first" if Config.CLEAN else "",
-        "verbose": "--verbose" if Config.VERBOSE else "",
-    }
-
-    if action == Action.GENERATE:
-        return f'cmake .. {cmake_flags["generator"]} {cmake_flags["platform"]} {cmake_flags["fresh"]} -DCMAKE_BUILD_TYPE={configuration.value}'
-    elif action == Action.BUILD:
-        return f'cmake --build . {cmake_flags["clean_first"]} {cmake_flags["verbose"]} --config {configuration.value}'
-    return None
-
-
 def run_command(command):
-    result = subprocess.run(command, shell=True)
-    return result.returncode == 0
+    print(f"Running command: {' '.join(command)}")
+    result = subprocess.run(command)
+    if result.returncode != 0:
+        raise RuntimeError(f"Command {' '.join(command)} failed with exit code {result.returncode}")
 
-def generate_project_files(action: Action, configuration: Configuration):
-    if not os.path.exists(Config.BUILD_FOLDER):
-        os.makedirs(Config.BUILD_FOLDER)
-        print(f"Created {Config.BUILD_FOLDER} folder.")
-
-    os.chdir(Config.BUILD_FOLDER)
-    command = get_cmake_command(action, configuration)
-    print(f"Generated project files with command: {command}")
-
-    if run_command(command):
-        print("Project files generated successfully.")
+def clean_build_folder():
+    if os.path.exists(Config.BUILD_FOLDER):
+        if Config.VERBOSE:
+            print(f"Removing build folder: {Config.BUILD_FOLDER}")
+        shutil.rmtree(Config.BUILD_FOLDER)
     else:
-        print("Failed to generate project files.")
-    os.chdir("..")
+        if Config.VERBOSE:
+            print(f"Build folder {Config.BUILD_FOLDER} does not exist, nothing to clean.")
 
+def generate_build_files():
+    os.makedirs(Config.BUILD_FOLDER, exist_ok=True)
+    conan_provider_path = os.path.abspath("conan_provider.cmake")
+    cmake_command = [
+        "cmake",
+        "-S", Config.SOURCE_DIR,
+        "-B", Config.BUILD_FOLDER,
+        "-G", Config.CMAKE_GENERATOR,
+        "-A", Config.PLATFORM.value,
+        f'-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES={conan_provider_path}'
+    ]
+    if Config.VERBOSE:
+        print(f"Generating build files with command: {' '.join(cmake_command)}")
+    run_command(cmake_command)
 
-def build_project(action: Action, configuration: Configuration):
-    if not os.path.exists(Config.BUILD_FOLDER):
-        print(
-            f"{Config.BUILD_FOLDER} folder does not exist. Please generate project files first."
-        )
-        return
+def build_project():
+    cmake_build_command = [
+        "cmake",
+        "--build", Config.BUILD_FOLDER,
+        "--config", Configuration.Release.value
+    ]
+    if Config.VERBOSE:
+        print(f"Building project with command: {' '.join(cmake_build_command)}")
+    run_command(cmake_build_command)
 
-    os.chdir(Config.BUILD_FOLDER)
-    command = get_cmake_command(action, configuration)
-    if run_command(command):
-        print(f"Project built successfully in {configuration} mode.")
-    else:
-        print(f"Failed to build project in {configuration} mode.")
-    os.chdir("..")
-
-def get_source_files(source_dir, extensions):
-    source_files = []
-    for root, _, files in os.walk(source_dir):
+def run_clang_format():
+    # Find all source files in SOURCE_DIR with extensions .cpp, .h, .hpp, .c
+    extensions = [".cpp", ".h", ".hpp", ".c"]
+    files_to_format = []
+    for root, _, files in os.walk(Config.SOURCE_DIR):
         for file in files:
             if any(file.endswith(ext) for ext in extensions):
-                source_files.append(os.path.join(root, file))
-    return source_files
-
-def run_clang_format(source_dir):
-    extensions = ['.cpp', '.h', '.hpp']
-    format_sources = get_source_files(source_dir, extensions)
-    
-    if not format_sources:
-        print(f'No source files found in {source_dir}.')
+                files_to_format.append(os.path.join(root, file))
+    if not files_to_format:
+        if Config.VERBOSE:
+            print("No source files found for clang-format.")
         return
+    clang_format_command = ["clang-format", "-i"] + files_to_format
+    if Config.VERBOSE:
+        print(f"Running clang-format on {len(files_to_format)} files.")
+    run_command(clang_format_command, Config.VERBOSE)
 
-    command = ['clang-format', '-i'] + format_sources
-    if run_command(command):
-        print('Clang-format successfully applied.')
+def main():
+    parser = argparse.ArgumentParser(description="Build script for the project.")
+    parser.add_argument("action", choices=[action.value for action in Action], help="Action to perform")
+    parser.add_argument("--config", choices=[config.value for config in Configuration], default=Configuration.Release.value, help="Build configuration")
+    parser.add_argument("--platform", choices=[platform.value for platform in Platform], default=Config.PLATFORM.value, help="Target platform")
+    parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("--fresh", action="store_true", help="Force fresh build (clean before build)")
+    args = parser.parse_args()
+
+    # Update config based on args
+    Config.VERBOSE = args.verbose
+    Config.FRESH = args.fresh
+    Config.PLATFORM = Platform(args.platform)
+    build_config = Configuration(args.config)
+
+    if Config.FRESH or (args.action == Action.CLEAN.value):
+        clean_build_folder()
+        if args.action == Action.CLEAN.value:
+            if Config.VERBOSE:
+                print("Clean action completed.")
+            return
+
+    if args.action == Action.GENERATE.value:
+        generate_build_files()
+    elif args.action == Action.BUILD.value:
+        # Ensure build files are generated before building
+        if not os.path.exists(Config.BUILD_FOLDER):
+            if Config.VERBOSE:
+                print("Build folder does not exist, generating build files first.")
+            generate_build_files()
+        build_project()
+    elif args.action == Action.CLANG_FORMAT.value:
+        run_clang_format()
     else:
-        print('Error running clang-format.')
-
+        print(f"Unknown action: {args.action}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="CMake Automation Script")
-    parser.add_argument(
-        "action", type=Action, choices=list(Action), help="Action to perform"
-    )
-    parser.add_argument(
-        "--configuration", type=Configuration, choices=list(Configuration), help="Build configuration"
-    )
-    args = parser.parse_args()
-    selected_action = args.action
-    selected_configuration = args.configuration
-    
-    actions = {
-        Action.CLEAN: remove_build_folder,
-        Action.GENERATE: lambda: generate_project_files(Action.GENERATE, selected_configuration),
-        Action.BUILD: lambda: build_project(Action.BUILD, selected_configuration),
-        Action.CLANG_FORMAT: lambda: run_clang_format(Config.SOURCE_DIR),
-    }
-
-    if selected_action in actions:
-        actions[selected_action]()
-    else:
-        print(f"Action '{selected_action}' is not implemented.")
+    main()
