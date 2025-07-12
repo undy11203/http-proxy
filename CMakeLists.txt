@@ -13,6 +13,7 @@ find_package(asio REQUIRED)
 # Исходники
 set(SRC_FILES
     main.cpp
+    utils/ConsoleArgs.h
 )
 
 add_executable(proxy ${SRC_FILES})
