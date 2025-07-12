@@ -14,6 +14,7 @@ find_package(asio REQUIRED)
 set(SRC_FILES
     main.cpp
     utils/ConsoleArgs.h
+    proxy_main/Proxy.cpp
 )
 
 add_executable(proxy ${SRC_FILES})

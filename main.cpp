@@ -14,8 +14,11 @@
 #include <list>
 #include <functional>
 #include <shared_mutex>
+#include <boost/asio.hpp>
 
 #include "utils/ConsoleArgs.h"
+#include "proxy_main/Proxy.h"
+
 
 
 std::atomic<bool> shutdown_requested(false);
@@ -39,7 +42,16 @@ int main(int argc, char* argv[]) {
     }
 
     // Application logic here...
+    try {
+        boost::asio::io_context io_context;
+        ProxyServer server(io_context, static_cast<short>(8080));
 
+        std::cout << "HTTP Proxy is running on port " << argv[1] << "...\n";
+        io_context.run();
+    }
+    catch (std::exception& e) {
+        std::cerr << "Exception: " << e.what() << "\n";
+    }
 
     return 0;
 }
